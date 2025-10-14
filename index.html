@@ -1,0 +1,397 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Download } from 'lucide-react';
+
+const TernaryPlot = ({ data, onDataChange, title, isCompleted }) => {
+  const svgRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const size = 400;
+  const padding = 80;
+  const height = (Math.sqrt(3) / 2) * size;
+
+  // Triangle vertices: top vertex is Health, bottom-left is Sustainable, bottom-right is Environmental
+  const vertices = {
+    health: { x: size / 2, y: 0 },
+    sustainable: { x: 0, y: height },
+    environmental: { x: size, y: height }
+  };
+
+  const ternaryToCartesian = (sustainable, health, environmental) => {
+    // Using barycentric coordinates
+    const x = vertices.sustainable.x * sustainable + 
+              vertices.health.x * health + 
+              vertices.environmental.x * environmental;
+    const y = vertices.sustainable.y * sustainable + 
+              vertices.health.y * health + 
+              vertices.environmental.y * environmental;
+    return { x, y };
+  };
+
+  const cartesianToTernary = (x, y) => {
+    // Convert cartesian to barycentric coordinates
+    const x1 = vertices.sustainable.x, y1 = vertices.sustainable.y;
+    const x2 = vertices.environmental.x, y2 = vertices.environmental.y;
+    const x3 = vertices.health.x, y3 = vertices.health.y;
+    
+    const det = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
+    const sustainable = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / det;
+    const environmental = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / det;
+    const health = 1 - sustainable - environmental;
+    
+    // Clamp values between 0 and 1
+    const clampedSustainable = Math.max(0, Math.min(1, sustainable));
+    const clampedHealth = Math.max(0, Math.min(1, health));
+    const clampedEnvironmental = Math.max(0, Math.min(1, environmental));
+    
+    // Normalize to ensure sum = 1
+    const sum = clampedSustainable + clampedHealth + clampedEnvironmental;
+    
+    return {
+      sustainable: clampedSustainable / sum,
+      health: clampedHealth / sum,
+      environmental: clampedEnvironmental / sum
+    };
+  };
+
+  const handleMouseDown = (e) => {
+    if (isCompleted) return;
+    setIsDragging(true);
+    handleMouseMove(e);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging && e.type === 'mousemove') return;
+    if (isCompleted) return;
+    
+    const svg = svgRef.current;
+    const rect = svg.getBoundingClientRect();
+    const x = e.clientX - rect.left - padding;
+    const y = e.clientY - rect.top - padding;
+    
+    // Check if point is inside triangle
+    if (x >= -10 && x <= size + 10 && y >= -10 && y <= height + 10) {
+      const newData = cartesianToTernary(x, y);
+      onDataChange(newData);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
+
+  const point = ternaryToCartesian(
+    data.sustainable,
+    data.health,
+    data.environmental
+  );
+
+  return (
+    <div className="flex flex-col items-center">
+      <h3 className="text-2xl font-bold mb-4 text-gray-800">{title}</h3>
+      <svg
+        ref={svgRef}
+        width={size + padding * 2}
+        height={height + padding * 2}
+        className={`${isCompleted ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} transition-opacity`}
+        onMouseDown={handleMouseDown}
+      >
+        <g transform={`translate(${padding}, ${padding})`}>
+          <defs>
+            <linearGradient id={`grad-${title}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.15" />
+              <stop offset="50%" stopColor="#3b82f6" stopOpacity="0.15" />
+              <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.15" />
+            </linearGradient>
+          </defs>
+          
+          {/* Triangle */}
+          <polygon
+            points={`${vertices.health.x},${vertices.health.y} ${vertices.sustainable.x},${vertices.sustainable.y} ${vertices.environmental.x},${vertices.environmental.y}`}
+            fill={`url(#grad-${title})`}
+            stroke="#64748b"
+            strokeWidth="3"
+          />
+          
+          {/* Grid lines */}
+          {[0.25, 0.5, 0.75].map((v) => {
+            // Lines parallel to each edge
+            const sustainableLine1 = ternaryToCartesian(v, 1-v, 0);
+            const sustainableLine2 = ternaryToCartesian(v, 0, 1-v);
+            
+            const healthLine1 = ternaryToCartesian(0, v, 1-v);
+            const healthLine2 = ternaryToCartesian(1-v, v, 0);
+            
+            const envLine1 = ternaryToCartesian(1-v, 0, v);
+            const envLine2 = ternaryToCartesian(0, 1-v, v);
+            
+            return (
+              <g key={v} opacity="0.4">
+                <line x1={sustainableLine1.x} y1={sustainableLine1.y} x2={sustainableLine2.x} y2={sustainableLine2.y} 
+                      stroke="#3b82f6" strokeWidth="1" strokeDasharray="3,3" />
+                <line x1={healthLine1.x} y1={healthLine1.y} x2={healthLine2.x} y2={healthLine2.y} 
+                      stroke="#10b981" strokeWidth="1" strokeDasharray="3,3" />
+                <line x1={envLine1.x} y1={envLine1.y} x2={envLine2.x} y2={envLine2.y} 
+                      stroke="#8b5cf6" strokeWidth="1" strokeDasharray="3,3" />
+              </g>
+            );
+          })}
+          
+          {/* Labels */}
+          <text x={vertices.health.x} y={vertices.health.y - 20} textAnchor="middle" className="fill-emerald-600 font-bold text-base">
+            Health Optimization
+          </text>
+          <text x={vertices.sustainable.x - 25} y={vertices.sustainable.y + 25} textAnchor="middle" className="fill-blue-600 font-bold text-base">
+            Sustainable
+          </text>
+          <text x={vertices.sustainable.x - 25} y={vertices.sustainable.y + 40} textAnchor="middle" className="fill-blue-600 font-bold text-base">
+            Living
+          </text>
+          <text x={vertices.environmental.x + 35} y={vertices.environmental.y + 25} textAnchor="middle" className="fill-purple-600 font-bold text-base">
+            Environmental
+          </text>
+          <text x={vertices.environmental.x + 35} y={vertices.environmental.y + 40} textAnchor="middle" className="fill-purple-600 font-bold text-base">
+            Conservation
+          </text>
+          
+          {/* Draggable point */}
+          <circle
+            cx={point.x}
+            cy={point.y}
+            r="12"
+            fill={isCompleted ? "#94a3b8" : "#ef4444"}
+            stroke="white"
+            strokeWidth="3"
+            className={`${isCompleted ? '' : 'drop-shadow-lg'} transition-all`}
+          />
+          {!isCompleted && (
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r="12"
+              fill="#ef4444"
+              opacity="0.3"
+              className="animate-ping"
+            />
+          )}
+        </g>
+      </svg>
+      <div className="mt-6 grid grid-cols-3 gap-4 w-full max-w-md text-center">
+        <div className="p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
+          <div className="text-xs text-blue-600 font-semibold mb-1">Sustainable Living</div>
+          <div className="text-xl font-bold text-blue-700">{(data.sustainable * 100).toFixed(1)}%</div>
+        </div>
+        <div className="p-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
+          <div className="text-xs text-emerald-600 font-semibold mb-1">Health Optimization</div>
+          <div className="text-xl font-bold text-emerald-700">{(data.health * 100).toFixed(1)}%</div>
+        </div>
+        <div className="p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
+          <div className="text-xs text-purple-600 font-semibold mb-1">Environmental Conservation</div>
+          <div className="text-xl font-bold text-purple-700">{(data.environmental * 100).toFixed(1)}%</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  const [currentData, setCurrentData] = useState({
+    sustainable: 0.33,
+    health: 0.34,
+    environmental: 0.33
+  });
+
+  const [futureData, setFutureData] = useState({
+    sustainable: 0.33,
+    health: 0.34,
+    environmental: 0.33
+  });
+
+  const [currentCompleted, setCurrentCompleted] = useState(false);
+  const [futureCompleted, setFutureCompleted] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
+  const [showThankYou, setShowThankYou] = useState(false);
+
+  const handleSubmit = () => {
+    if (!currentCompleted || !futureCompleted) {
+      alert('Please complete both ternary plots before submitting!');
+      return;
+    }
+
+    const submission = {
+      timestamp: new Date().toISOString(),
+      current_year: {
+        sustainable_living: (currentData.sustainable * 100).toFixed(2),
+        health_optimization: (currentData.health * 100).toFixed(2),
+        environmental_conservation: (currentData.environmental * 100).toFixed(2)
+      },
+      year_2075: {
+        sustainable_living: (futureData.sustainable * 100).toFixed(2),
+        health_optimization: (futureData.health * 100).toFixed(2),
+        environmental_conservation: (futureData.environmental * 100).toFixed(2)
+      }
+    };
+
+    setSubmissions([...submissions, submission]);
+    setShowThankYou(true);
+    
+    setTimeout(() => {
+      setShowThankYou(false);
+      setCurrentCompleted(false);
+      setFutureCompleted(false);
+      setCurrentData({ sustainable: 0.33, health: 0.34, environmental: 0.33 });
+      setFutureData({ sustainable: 0.33, health: 0.34, environmental: 0.33 });
+    }, 3000);
+  };
+
+  const downloadData = () => {
+    const dataStr = JSON.stringify(submissions, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `priority_survey_data_${new Date().toISOString()}.json`;
+    link.click();
+  };
+
+  const downloadCSV = () => {
+    let csv = 'Timestamp,Current_Sustainable,Current_Health,Current_Environmental,Future_Sustainable,Future_Health,Future_Environmental\n';
+    submissions.forEach(sub => {
+      csv += `${sub.timestamp},${sub.current_year.sustainable_living},${sub.current_year.health_optimization},${sub.current_year.environmental_conservation},${sub.year_2075.sustainable_living},${sub.year_2075.health_optimization},${sub.year_2075.environmental_conservation}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `priority_survey_data_${new Date().toISOString()}.csv`;
+    link.click();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-8">
+      <div className="max-w-7xl mx-auto">
+        <header className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-gray-800 mb-4">
+            Priority Balance Survey
+          </h1>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+            How do you prioritize these three areas today versus in 2075?<br/>
+            <span className="text-base text-gray-500 mt-2 inline-block">
+              Drag the red point inside each triangle. The closer to a corner, the higher that priority.
+            </span>
+          </p>
+        </header>
+
+        <div className="grid md:grid-cols-2 gap-12 mb-12">
+          <div className="bg-white rounded-2xl shadow-xl p-8 transform transition-all hover:scale-[1.01]">
+            <TernaryPlot
+              data={currentData}
+              onDataChange={setCurrentData}
+              title="Present Day (2025)"
+              isCompleted={currentCompleted}
+            />
+            <button
+              onClick={() => setCurrentCompleted(true)}
+              disabled={currentCompleted}
+              className={`mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all ${
+                currentCompleted
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
+              }`}
+            >
+              {currentCompleted ? '✓ Completed' : 'Lock In Current Values'}
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-8 transform transition-all hover:scale-[1.01]">
+            <TernaryPlot
+              data={futureData}
+              onDataChange={setFutureData}
+              title="Year 2075"
+              isCompleted={futureCompleted}
+            />
+            <button
+              onClick={() => setFutureCompleted(true)}
+              disabled={futureCompleted}
+              className={`mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all ${
+                futureCompleted
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-700 hover:shadow-lg'
+              }`}
+            >
+              {futureCompleted ? '✓ Completed' : 'Lock In Future Values'}
+            </button>
+          </div>
+        </div>
+
+        <div className="text-center mb-8">
+          <button
+            onClick={handleSubmit}
+            disabled={!currentCompleted || !futureCompleted}
+            className={`py-4 px-12 rounded-xl font-bold text-lg text-white transition-all transform ${
+              currentCompleted && futureCompleted
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 hover:shadow-2xl hover:scale-105'
+                : 'bg-gray-300 cursor-not-allowed'
+            }`}
+          >
+            Submit Response
+          </button>
+        </div>
+
+        {showThankYou && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div className="bg-white rounded-2xl p-12 shadow-2xl text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Thank You!</h2>
+              <p className="text-gray-600">Your response has been recorded.</p>
+            </div>
+          </div>
+        )}
+
+        {submissions.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-xl p-8 mt-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+              Collected Data ({submissions.length} responses)
+            </h2>
+            <div className="flex gap-4 mb-4">
+              <button
+                onClick={downloadData}
+                className="flex items-center gap-2 py-2 px-6 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all"
+              >
+                <Download size={20} />
+                Download JSON
+              </button>
+              <button
+                onClick={downloadCSV}
+                className="flex items-center gap-2 py-2 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+              >
+                <Download size={20} />
+                Download CSV
+              </button>
+            </div>
+            <div className="max-h-96 overflow-auto bg-gray-50 rounded-lg p-4">
+              <pre className="text-sm text-gray-700">
+                {JSON.stringify(submissions, null, 2)}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        <footer className="text-center mt-12 text-gray-500 text-sm">
+          <p>📍 Sustainable Living is at the bottom-left corner</p>
+          <p className="mt-1">Data is stored locally in your browser. Download before closing the page.</p>
+        </footer>
+      </div>
+    </div>
+  );
+}

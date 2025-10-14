@@ -1,400 +1,772 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Download } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Priority Balance Survey</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-const TernaryPlot = ({ data, onDataChange, title, isCompleted }) => {
-  const svgRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const size = 400;
-  const padding = 80;
-  const height = (Math.sqrt(3) / 2) * size;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #eff6ff 0%, #ffffff 50%, #faf5ff 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
 
-  // Triangle vertices: top vertex is Health, bottom-left is Sustainable, bottom-right is Environmental
-  const vertices = {
-    health: { x: size / 2, y: 0 },
-    sustainable: { x: 0, y: height },
-    environmental: { x: size, y: height }
-  };
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
 
-  const ternaryToCartesian = (sustainable, health, environmental) => {
-    // Using barycentric coordinates
-    const x = vertices.sustainable.x * sustainable + 
-              vertices.health.x * health + 
-              vertices.environmental.x * environmental;
-    const y = vertices.sustainable.y * sustainable + 
-              vertices.health.y * health + 
-              vertices.environmental.y * environmental;
-    return { x, y };
-  };
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
 
-  const cartesianToTernary = (x, y) => {
-    // Convert cartesian to barycentric coordinates
-    const x1 = vertices.sustainable.x, y1 = vertices.sustainable.y;
-    const x2 = vertices.environmental.x, y2 = vertices.environmental.y;
-    const x3 = vertices.health.x, y3 = vertices.health.y;
-    
-    const det = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
-    const sustainable = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / det;
-    const environmental = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / det;
-    const health = 1 - sustainable - environmental;
-    
-    // Clamp values between 0 and 1
-    const clampedSustainable = Math.max(0, Math.min(1, sustainable));
-    const clampedHealth = Math.max(0, Math.min(1, health));
-    const clampedEnvironmental = Math.max(0, Math.min(1, environmental));
-    
-    // Normalize to ensure sum = 1
-    const sum = clampedSustainable + clampedHealth + clampedEnvironmental;
-    
-    return {
-      sustainable: clampedSustainable / sum,
-      health: clampedHealth / sum,
-      environmental: clampedEnvironmental / sum
-    };
-  };
+        h1 {
+            font-size: 3rem;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
 
-  const handleMouseDown = (e) => {
-    if (isCompleted) return;
-    setIsDragging(true);
-    handleMouseMove(e);
-  };
+        .subtitle {
+            font-size: 1.25rem;
+            color: #4b5563;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+        }
 
-  const handleMouseMove = (e) => {
-    if (!isDragging && e.type === 'mousemove') return;
-    if (isCompleted) return;
-    
-    const svg = svgRef.current;
-    const rect = svg.getBoundingClientRect();
-    const x = e.clientX - rect.left - padding;
-    const y = e.clientY - rect.top - padding;
-    
-    // Check if point is inside triangle
-    if (x >= -10 && x <= size + 10 && y >= -10 && y <= height + 10) {
-      const newData = cartesianToTernary(x, y);
-      onDataChange(newData);
-    }
-  };
+        .instruction {
+            font-size: 1rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+            display: block;
+        }
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+        .plots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 3rem;
+            margin-bottom: 3rem;
+        }
 
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging]);
+        .plot-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            transition: transform 0.3s;
+        }
 
-  const point = ternaryToCartesian(
-    data.sustainable,
-    data.health,
-    data.environmental
-  );
+        .plot-card:hover {
+            transform: scale(1.01);
+        }
 
-  return (
-    <div className="flex flex-col items-center">
-      <h3 className="text-2xl font-bold mb-4 text-gray-800">{title}</h3>
-      <svg
-        ref={svgRef}
-        width={size + padding * 2}
-        height={height + padding * 2}
-        className={`${isCompleted ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'} transition-opacity`}
-        onMouseDown={handleMouseDown}
-      >
-        <g transform={`translate(${padding}, ${padding})`}>
-          <defs>
-            <linearGradient id={`grad-${title}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.15" />
-              <stop offset="50%" stopColor="#3b82f6" stopOpacity="0.15" />
-              <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.15" />
-            </linearGradient>
-          </defs>
-          
-          {/* Triangle */}
-          <polygon
-            points={`${vertices.health.x},${vertices.health.y} ${vertices.sustainable.x},${vertices.sustainable.y} ${vertices.environmental.x},${vertices.environmental.y}`}
-            fill={`url(#grad-${title})`}
-            stroke="#64748b"
-            strokeWidth="3"
-          />
-          
-          {/* Grid lines */}
-          {[0.25, 0.5, 0.75].map((v) => {
-            // Lines parallel to each edge
-            const sustainableLine1 = ternaryToCartesian(v, 1-v, 0);
-            const sustainableLine2 = ternaryToCartesian(v, 0, 1-v);
-            
-            const healthLine1 = ternaryToCartesian(0, v, 1-v);
-            const healthLine2 = ternaryToCartesian(1-v, v, 0);
-            
-            const envLine1 = ternaryToCartesian(1-v, 0, v);
-            const envLine2 = ternaryToCartesian(0, 1-v, v);
-            
-            return (
-              <g key={v} opacity="0.4">
-                <line x1={sustainableLine1.x} y1={sustainableLine1.y} x2={sustainableLine2.x} y2={sustainableLine2.y} 
-                      stroke="#3b82f6" strokeWidth="1" strokeDasharray="3,3" />
-                <line x1={healthLine1.x} y1={healthLine1.y} x2={healthLine2.x} y2={healthLine2.y} 
-                      stroke="#10b981" strokeWidth="1" strokeDasharray="3,3" />
-                <line x1={envLine1.x} y1={envLine1.y} x2={envLine2.x} y2={envLine2.y} 
-                      stroke="#8b5cf6" strokeWidth="1" strokeDasharray="3,3" />
-              </g>
-            );
-          })}
-          
-          {/* Labels */}
-          <text x={vertices.health.x} y={vertices.health.y - 20} textAnchor="middle" className="fill-emerald-600 font-bold text-base">
-            Health Optimization
-          </text>
-          <text x={vertices.sustainable.x - 25} y={vertices.sustainable.y + 25} textAnchor="middle" className="fill-blue-600 font-bold text-base">
-            Sustainable
-          </text>
-          <text x={vertices.sustainable.x - 25} y={vertices.sustainable.y + 40} textAnchor="middle" className="fill-blue-600 font-bold text-base">
-            Living
-          </text>
-          <text x={vertices.environmental.x + 35} y={vertices.environmental.y + 25} textAnchor="middle" className="fill-purple-600 font-bold text-base">
-            Environmental
-          </text>
-          <text x={vertices.environmental.x + 35} y={vertices.environmental.y + 40} textAnchor="middle" className="fill-purple-600 font-bold text-base">
-            Conservation
-          </text>
-          
-          {/* Draggable point */}
-          <circle
-            cx={point.x}
-            cy={point.y}
-            r="12"
-            fill={isCompleted ? "#94a3b8" : "#ef4444"}
-            stroke="white"
-            strokeWidth="3"
-            className={`${isCompleted ? '' : 'drop-shadow-lg'} transition-all`}
-          />
-          {!isCompleted && (
-            <circle
-              cx={point.x}
-              cy={point.y}
-              r="12"
-              fill="#ef4444"
-              opacity="0.3"
-              className="animate-ping"
-            />
-          )}
-        </g>
-      </svg>
-      <div className="mt-6 grid grid-cols-3 gap-4 w-full max-w-md text-center">
-        <div className="p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
-          <div className="text-xs text-blue-600 font-semibold mb-1">Sustainable Living</div>
-          <div className="text-xl font-bold text-blue-700">{(data.sustainable * 100).toFixed(1)}%</div>
-        </div>
-        <div className="p-3 bg-emerald-50 rounded-lg border-2 border-emerald-200">
-          <div className="text-xs text-emerald-600 font-semibold mb-1">Health Optimization</div>
-          <div className="text-xl font-bold text-emerald-700">{(data.health * 100).toFixed(1)}%</div>
-        </div>
-        <div className="p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
-          <div className="text-xs text-purple-600 font-semibold mb-1">Environmental Conservation</div>
-          <div className="text-xl font-bold text-purple-700">{(data.environmental * 100).toFixed(1)}%</div>
-        </div>
-      </div>
-    </div>
-  );
-};
+        .plot-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1f2937;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
 
-export default function App() {
-  const [currentData, setCurrentData] = useState({
-    sustainable: 0.33,
-    health: 0.34,
-    environmental: 0.33
-  });
+        .svg-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
 
-  const [futureData, setFutureData] = useState({
-    sustainable: 0.33,
-    health: 0.34,
-    environmental: 0.33
-  });
+        svg {
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
 
-  const [currentCompleted, setCurrentCompleted] = useState(false);
-  const [futureCompleted, setFutureCompleted] = useState(false);
-  const [submissions, setSubmissions] = useState([]);
-  const [showThankYou, setShowThankYou] = useState(false);
+        svg.completed {
+            opacity: 0.75;
+            cursor: not-allowed;
+        }
 
-  const handleSubmit = () => {
-    if (!currentCompleted || !futureCompleted) {
-      alert('Please complete both ternary plots before submitting!');
-      return;
-    }
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
 
-    const submission = {
-      timestamp: new Date().toISOString(),
-      current_year: {
-        sustainable_living: (currentData.sustainable * 100).toFixed(2),
-        health_optimization: (currentData.health * 100).toFixed(2),
-        environmental_conservation: (currentData.environmental * 100).toFixed(2)
-      },
-      year_2075: {
-        sustainable_living: (futureData.sustainable * 100).toFixed(2),
-        health_optimization: (futureData.health * 100).toFixed(2),
-        environmental_conservation: (futureData.environmental * 100).toFixed(2)
-      }
-    };
+        .value-box {
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
 
-    setSubmissions([...submissions, submission]);
-    setShowThankYou(true);
-    
-    setTimeout(() => {
-      setShowThankYou(false);
-      setCurrentCompleted(false);
-      setFutureCompleted(false);
-      setCurrentData({ sustainable: 0.33, health: 0.34, environmental: 0.33 });
-      setFutureData({ sustainable: 0.33, health: 0.34, environmental: 0.33 });
-    }, 3000);
-  };
+        .value-box.sustainable {
+            background: #dbeafe;
+            border: 2px solid #93c5fd;
+        }
 
-  const downloadData = () => {
-    const dataStr = JSON.stringify(submissions, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `priority_survey_data_${new Date().toISOString()}.json`;
-    link.click();
-  };
+        .value-box.health {
+            background: #d1fae5;
+            border: 2px solid #6ee7b7;
+        }
 
-  const downloadCSV = () => {
-    let csv = 'Timestamp,Current_Sustainable,Current_Health,Current_Environmental,Future_Sustainable,Future_Health,Future_Environmental\n';
-    submissions.forEach(sub => {
-      csv += `${sub.timestamp},${sub.current_year.sustainable_living},${sub.current_year.health_optimization},${sub.current_year.environmental_conservation},${sub.year_2075.sustainable_living},${sub.year_2075.health_optimization},${sub.year_2075.environmental_conservation}\n`;
-    });
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `priority_survey_data_${new Date().toISOString()}.csv`;
-    link.click();
-  };
+        .value-box.environmental {
+            background: #e9d5ff;
+            border: 2px solid #c084fc;
+        }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-800 mb-4">
-            Priority Balance Survey
-          </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
-            How do you prioritize these three areas today versus in 2075?<br/>
-            <span className="text-base text-gray-500 mt-2 inline-block">
-              Drag the red point inside each triangle. The closer to a corner, the higher that priority.
-            </span>
-          </p>
+        .value-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .sustainable .value-label { color: #1e40af; }
+        .health .value-label { color: #047857; }
+        .environmental .value-label { color: #7c3aed; }
+
+        .value-number {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .sustainable .value-number { color: #1e3a8a; }
+        .health .value-number { color: #065f46; }
+        .environmental .value-number { color: #6b21a8; }
+
+        .lock-button {
+            width: 100%;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+        }
+
+        .lock-button.current {
+            background: #2563eb;
+        }
+
+        .lock-button.current:hover:not(:disabled) {
+            background: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .lock-button.future {
+            background: #7c3aed;
+        }
+
+        .lock-button.future:hover:not(:disabled) {
+            background: #6d28d9;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+        }
+
+        .lock-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .submit-section {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .submit-button {
+            padding: 1rem 3rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-size: 1.125rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .submit-button:hover:not(:disabled) {
+            background: linear-gradient(135deg, #1d4ed8 0%, #6d28d9 100%);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+            transform: scale(1.05);
+        }
+
+        .submit-button:disabled {
+            background: #d1d5db;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .thank-you-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .thank-you-overlay.show {
+            display: flex;
+        }
+
+        .thank-you-box {
+            background: white;
+            border-radius: 1rem;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .thank-you-emoji {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .thank-you-title {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+
+        .thank-you-text {
+            color: #6b7280;
+        }
+
+        .data-section {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-top: 2rem;
+            display: none;
+        }
+
+        .data-section.show {
+            display: block;
+        }
+
+        .data-header {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 1rem;
+        }
+
+        .download-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .download-button {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .download-button.json {
+            background: #10b981;
+        }
+
+        .download-button.json:hover {
+            background: #059669;
+        }
+
+        .download-button.csv {
+            background: #2563eb;
+        }
+
+        .download-button.csv:hover {
+            background: #1d4ed8;
+        }
+
+        .data-display {
+            max-height: 400px;
+            overflow: auto;
+            background: #f9fafb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+        }
+
+        .data-display pre {
+            font-size: 0.875rem;
+            color: #374151;
+            white-space: pre-wrap;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+
+        footer p {
+            margin: 0.25rem 0;
+        }
+
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+
+        .ping {
+            animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Priority Balance Survey</h1>
+            <p class="subtitle">
+                How do you prioritize these three areas today versus in 2075?<br>
+                <span class="instruction">Drag the red point inside each triangle. The closer to a corner, the higher that priority.</span>
+            </p>
         </header>
 
-        <div className="grid md:grid-cols-2 gap-12 mb-12">
-          <div className="bg-white rounded-2xl shadow-xl p-8 transform transition-all hover:scale-[1.01]">
-            <TernaryPlot
-              data={currentData}
-              onDataChange={setCurrentData}
-              title="Present Day (2025)"
-              isCompleted={currentCompleted}
-            />
-            <button
-              onClick={() => setCurrentCompleted(true)}
-              disabled={currentCompleted}
-              className={`mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all ${
-                currentCompleted
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
-              }`}
-            >
-              {currentCompleted ? '✓ Completed' : 'Lock In Current Values'}
-            </button>
-          </div>
+        <div class="plots-grid">
+            <!-- Current Year Plot -->
+            <div class="plot-card">
+                <h3 class="plot-title">Present Day (2025)</h3>
+                <div class="svg-container">
+                    <svg id="currentPlot" width="560" height="506"></svg>
+                </div>
+                <div class="values-grid">
+                    <div class="value-box sustainable">
+                        <div class="value-label">Sustainable Living</div>
+                        <div class="value-number" id="currentSustainable">33.3%</div>
+                    </div>
+                    <div class="value-box health">
+                        <div class="value-label">Health Optimization</div>
+                        <div class="value-number" id="currentHealth">33.4%</div>
+                    </div>
+                    <div class="value-box environmental">
+                        <div class="value-label">Environmental Conservation</div>
+                        <div class="value-number" id="currentEnvironmental">33.3%</div>
+                    </div>
+                </div>
+                <button class="lock-button current" id="lockCurrent">Lock In Current Values</button>
+            </div>
 
-          <div className="bg-white rounded-2xl shadow-xl p-8 transform transition-all hover:scale-[1.01]">
-            <TernaryPlot
-              data={futureData}
-              onDataChange={setFutureData}
-              title="Year 2075"
-              isCompleted={futureCompleted}
-            />
-            <button
-              onClick={() => setFutureCompleted(true)}
-              disabled={futureCompleted}
-              className={`mt-6 w-full py-3 px-6 rounded-lg font-semibold text-white transition-all ${
-                futureCompleted
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-purple-600 hover:bg-purple-700 hover:shadow-lg'
-              }`}
-            >
-              {futureCompleted ? '✓ Completed' : 'Lock In Future Values'}
-            </button>
-          </div>
+            <!-- Future Year Plot -->
+            <div class="plot-card">
+                <h3 class="plot-title">Year 2075</h3>
+                <div class="svg-container">
+                    <svg id="futurePlot" width="560" height="506"></svg>
+                </div>
+                <div class="values-grid">
+                    <div class="value-box sustainable">
+                        <div class="value-label">Sustainable Living</div>
+                        <div class="value-number" id="futureSustainable">33.3%</div>
+                    </div>
+                    <div class="value-box health">
+                        <div class="value-label">Health Optimization</div>
+                        <div class="value-number" id="futureHealth">33.4%</div>
+                    </div>
+                    <div class="value-box environmental">
+                        <div class="value-label">Environmental Conservation</div>
+                        <div class="value-number" id="futureEnvironmental">33.3%</div>
+                    </div>
+                </div>
+                <button class="lock-button future" id="lockFuture">Lock In Future Values</button>
+            </div>
         </div>
 
-        <div className="text-center mb-8">
-          <button
-            onClick={handleSubmit}
-            disabled={!currentCompleted || !futureCompleted}
-            className={`py-4 px-12 rounded-xl font-bold text-lg text-white transition-all transform ${
-              currentCompleted && futureCompleted
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 hover:shadow-2xl hover:scale-105'
-                : 'bg-gray-300 cursor-not-allowed'
-            }`}
-          >
-            Submit Response
-          </button>
+        <div class="submit-section">
+            <button class="submit-button" id="submitButton" disabled>Submit Response</button>
         </div>
 
-        {showThankYou && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div className="bg-white rounded-2xl p-12 shadow-2xl text-center">
-              <div className="text-6xl mb-4">🎉</div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">Thank You!</h2>
-              <p className="text-gray-600">Your response has been recorded.</p>
+        <div class="thank-you-overlay" id="thankYouOverlay">
+            <div class="thank-you-box">
+                <div class="thank-you-emoji">🎉</div>
+                <h2 class="thank-you-title">Thank You!</h2>
+                <p class="thank-you-text">Your response has been recorded.</p>
             </div>
-          </div>
-        )}
+        </div>
 
-        {submissions.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 mt-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              Collected Data ({submissions.length} responses)
-            </h2>
-            <div className="flex gap-4 mb-4">
-              <button
-                onClick={downloadData}
-                className="flex items-center gap-2 py-2 px-6 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-all"
-              >
-                <Download size={20} />
-                Download JSON
-              </button>
-              <button
-                onClick={downloadCSV}
-                className="flex items-center gap-2 py-2 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
-              >
-                <Download size={20} />
-                Download CSV
-              </button>
+        <div class="data-section" id="dataSection">
+            <h2 class="data-header">Collected Data (<span id="responseCount">0</span> responses)</h2>
+            <div class="download-buttons">
+                <button class="download-button json" id="downloadJson">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download JSON
+                </button>
+                <button class="download-button csv" id="downloadCsv">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download CSV
+                </button>
             </div>
-            <div className="max-h-96 overflow-auto bg-gray-50 rounded-lg p-4">
-              <pre className="text-sm text-gray-700">
-                {JSON.stringify(submissions, null, 2)}
-              </pre>
+            <div class="data-display">
+                <pre id="dataDisplay"></pre>
             </div>
-          </div>
-        )}
+        </div>
 
-        <footer className="text-center mt-12 text-gray-500 text-sm">
-          <p>📍 Sustainable Living is at the bottom-left corner</p>
-          <p className="mt-1">Data is stored locally in your browser. Download before closing the page.</p>
+        <footer>
+            <p>📍 Sustainable Living is at the bottom-left corner</p>
+            <p>Data is stored locally in your browser. Download before closing the page.</p>
         </footer>
-      </div>
     </div>
-  );
-}
-```
 
-This is the complete React code for the ternary plot survey website. You can copy and paste this into your React project.
+    <script>
+        // State management
+        const state = {
+            current: { sustainable: 0.33, health: 0.34, environmental: 0.33 },
+            future: { sustainable: 0.33, health: 0.34, environmental: 0.33 },
+            currentLocked: false,
+            futureLocked: false,
+            submissions: []
+        };
+
+        const SIZE = 400;
+        const PADDING = 80;
+        const HEIGHT = (Math.sqrt(3) / 2) * SIZE;
+
+        const vertices = {
+            health: { x: SIZE / 2, y: 0 },
+            sustainable: { x: 0, y: HEIGHT },
+            environmental: { x: SIZE, y: HEIGHT }
+        };
+
+        // Coordinate conversion functions
+        function ternaryToCartesian(sustainable, health, environmental) {
+            const x = vertices.sustainable.x * sustainable + 
+                      vertices.health.x * health + 
+                      vertices.environmental.x * environmental;
+            const y = vertices.sustainable.y * sustainable + 
+                      vertices.health.y * health + 
+                      vertices.environmental.y * environmental;
+            return { x, y };
+        }
+
+        function cartesianToTernary(x, y) {
+            const x1 = vertices.sustainable.x, y1 = vertices.sustainable.y;
+            const x2 = vertices.environmental.x, y2 = vertices.environmental.y;
+            const x3 = vertices.health.x, y3 = vertices.health.y;
+            
+            const det = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
+            const sustainable = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / det;
+            const environmental = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / det;
+            const health = 1 - sustainable - environmental;
+            
+            const clampedSustainable = Math.max(0, Math.min(1, sustainable));
+            const clampedHealth = Math.max(0, Math.min(1, health));
+            const clampedEnvironmental = Math.max(0, Math.min(1, environmental));
+            
+            const sum = clampedSustainable + clampedHealth + clampedEnvironmental;
+            
+            return {
+                sustainable: clampedSustainable / sum,
+                health: clampedHealth / sum,
+                environmental: clampedEnvironmental / sum
+            };
+        }
+
+        // Create SVG elements
+        function createTernaryPlot(svgId, title) {
+            const svg = document.getElementById(svgId);
+            svg.innerHTML = '';
+            
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.setAttribute('transform', `translate(${PADDING}, ${PADDING})`);
+            
+            // Gradient
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            gradient.setAttribute('id', `grad-${svgId}`);
+            gradient.innerHTML = `
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.15" />
+                <stop offset="50%" stop-color="#3b82f6" stop-opacity="0.15" />
+                <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.15" />
+            `;
+            defs.appendChild(gradient);
+            g.appendChild(defs);
+            
+            // Triangle
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('points', `${vertices.health.x},${vertices.health.y} ${vertices.sustainable.x},${vertices.sustainable.y} ${vertices.environmental.x},${vertices.environmental.y}`);
+            polygon.setAttribute('fill', `url(#grad-${svgId})`);
+            polygon.setAttribute('stroke', '#64748b');
+            polygon.setAttribute('stroke-width', '3');
+            g.appendChild(polygon);
+            
+            // Grid lines
+            [0.25, 0.5, 0.75].forEach(v => {
+                const sustainableLine1 = ternaryToCartesian(v, 1-v, 0);
+                const sustainableLine2 = ternaryToCartesian(v, 0, 1-v);
+                const healthLine1 = ternaryToCartesian(0, v, 1-v);
+                const healthLine2 = ternaryToCartesian(1-v, v, 0);
+                const envLine1 = ternaryToCartesian(1-v, 0, v);
+                const envLine2 = ternaryToCartesian(0, 1-v, v);
+                
+                const lines = [
+                    { x1: sustainableLine1.x, y1: sustainableLine1.y, x2: sustainableLine2.x, y2: sustainableLine2.y, color: '#3b82f6' },
+                    { x1: healthLine1.x, y1: healthLine1.y, x2: healthLine2.x, y2: healthLine2.y, color: '#10b981' },
+                    { x1: envLine1.x, y1: envLine1.y, x2: envLine2.x, y2: envLine2.y, color: '#8b5cf6' }
+                ];
+                
+                lines.forEach(l => {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', l.x1);
+                    line.setAttribute('y1', l.y1);
+                    line.setAttribute('x2', l.x2);
+                    line.setAttribute('y2', l.y2);
+                    line.setAttribute('stroke', l.color);
+                    line.setAttribute('stroke-width', '1');
+                    line.setAttribute('stroke-dasharray', '3,3');
+                    line.setAttribute('opacity', '0.4');
+                    g.appendChild(line);
+                });
+            });
+            
+            // Labels
+            const labels = [
+                { text: 'Health Optimization', x: vertices.health.x, y: vertices.health.y - 20, color: '#059669', anchor: 'middle' },
+                { text: 'Sustainable', x: vertices.sustainable.x - 25, y: vertices.sustainable.y + 25, color: '#1e40af', anchor: 'middle' },
+                { text: 'Living', x: vertices.sustainable.x - 25, y: vertices.sustainable.y + 40, color: '#1e40af', anchor: 'middle' },
+                { text: 'Environmental', x: vertices.environmental.x + 35, y: vertices.environmental.y + 25, color: '#7c3aed', anchor: 'middle' },
+                { text: 'Conservation', x: vertices.environmental.x + 35, y: vertices.environmental.y + 40, color: '#7c3aed', anchor: 'middle' }
+            ];
+            
+            labels.forEach(l => {
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', l.x);
+                text.setAttribute('y', l.y);
+                text.setAttribute('text-anchor', l.anchor);
+                text.setAttribute('fill', l.color);
+                text.setAttribute('font-weight', 'bold');
+                text.setAttribute('font-size', '16');
+                text.textContent = l.text;
+                g.appendChild(text);
+            });
+            
+            // Point group
+            const pointGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            pointGroup.setAttribute('id', `${svgId}-point`);
+            g.appendChild(pointGroup);
+            
+            svg.appendChild(g);
+        }
+
+        function updatePoint(svgId, data, isLocked) {
+            const point = ternaryToCartesian(data.sustainable, data.health, data.environmental);
+            const pointGroup = document.getElementById(`${svgId}-point`);
+            pointGroup.innerHTML = '';
+            
+            if (!isLocked) {
+                const pingCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                pingCircle.setAttribute('cx', point.x);
+                pingCircle.setAttribute('cy', point.y);
+                pingCircle.setAttribute('r', '12');
+                pingCircle.setAttribute('fill', '#ef4444');
+                pingCircle.setAttribute('opacity', '0.3');
+                pingCircle.setAttribute('class', 'ping');
+                pointGroup.appendChild(pingCircle);
+            }
+            
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', point.x);
+            circle.setAttribute('cy', point.y);
+            circle.setAttribute('r', '12');
+            circle.setAttribute('fill', isLocked ? '#94a3af' : '#ef4444');
+            circle.setAttribute('stroke', 'white');
+            circle.setAttribute('stroke-width', '3');
+            pointGroup.appendChild(circle);
+        }
+
+        function updateValues(type, data) {
+            document.getElementById(`${type}Sustainable`).textContent = (data.sustainable * 100).toFixed(1) + '%';
+            document.getElementById(`${type}Health`).textContent = (data.health * 100).toFixed(1) + '%';
+            document.getElementById(`${type}Environmental`).textContent = (data.environmental * 100).toFixed(1) + '%';
+        }
+
+        function setupPlotInteraction(svgId, type) {
+            const svg = document.getElementById(svgId);
+            let isDragging = false;
+            
+            function handleMove(e) {
+                if (state[`${type}Locked`]) return;
+                
+                const rect = svg.getBoundingClientRect();
+                const x = e.clientX - rect.left - PADDING;
+                const y = e.clientY - rect.top - PADDING;
+                
+                if (x >= -10 && x <= SIZE + 10 && y >= -10 && y <= HEIGHT + 10) {
+                    const newData = cartesianToTernary(x, y);
+                    state[type] = newData;
+                    updatePoint(svgId, newData, false);
+                    updateValues(type, newData);
+                }
+            }
+            
+            svg.addEventListener('mousedown', (e) => {
+                if (state[`${type}Locked`]) return;
+                isDragging = true;
+                handleMove(e);
+            });
+            
+            svg.addEventListener('mousemove', (e) => {
+                if (isDragging) handleMove(e);
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        }
+
+        function checkSubmitButton() {
+            const submitButton = document.getElementById('submitButton');
+            submitButton.disabled = !(state.currentLocked && state.futureLocked);
+        }
+
+        function handleSubmit() {
+            if (!state.currentLocked || !state.futureLocked) {
+                alert('Please complete both ternary plots before submitting!');
+                return;
+            }
+            
+            const submission = {
+                timestamp: new Date().toISOString(),
+                current_year: {
+                    sustainable_living: (state.current.sustainable * 100).toFixed(2),
+                    health_optimization: (state.current.health * 100).toFixed(2),
+                    environmental_conservation: (state.current.environmental * 100).toFixed(2)
+                },
+                year_2075: {
+                    sustainable_living: (state.future.sustainable * 100).toFixed(2),
+                    health_optimization: (state.future.health * 100).toFixed(2),
+                    environmental_conservation: (state.future.environmental * 100).toFixed(2)
+                }
+            };
+            
+            state.submissions.push(submission);
+            updateDataDisplay();
+            
+            // Show thank you message
+            document.getElementById('thankYouOverlay').classList.add('show');
+            
+            setTimeout(() => {
+                document.getElementById('thankYouOverlay').classList.remove('show');
+                
+                // Reset for next submission
+                state.currentLocked = false;
+                state.futureLocked = false;
+                state.current = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
+                state.future = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
+                
+                updatePoint('currentPlot', state.current, false);
+                updatePoint('futurePlot', state.future, false);
+                updateValues('current', state.current);
+                updateValues('future', state.future);
+                
+                document.getElementById('currentPlot').classList.remove('completed');
+                document.getElementById('futurePlot').classList.remove('completed');
+                document.getElementById('lockCurrent').disabled = false;
+                document.getElementById('lockCurrent').textContent = 'Lock In Current Values';
+                document.getElementById('lockFuture').disabled = false;
+                document.getElementById('lockFuture').textContent = 'Lock In Future Values';
+                
+                checkSubmitButton();
+            }, 3000);
+        }
+
+        function updateDataDisplay() {
+            const dataSection = document.getElementById('dataSection');
+            const dataDisplay = document.getElementById('dataDisplay');
+            const responseCount = document.getElementById('responseCount');
+            
+            if (state.submissions.length > 0) {
+                dataSection.classList.add('show');
+                responseCount.textContent = state.submissions.length;
+                dataDisplay.textContent = JSON.stringify(state.submissions, null, 2);
+            }
+        }
+
+        function downloadJSON() {
+            const dataStr = JSON.stringify(state.submissions, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `priority_survey_data_${new Date().toISOString()}.json`;
+            link.click();
+        }
+
+        function downloadCSV() {
+            let csv = 'Timestamp,Current_Sustainable,Current_Health,Current_Environmental,Future_Sustainable,Future_Health,Future_Environmental\n';
+            state.submissions.forEach(sub => {
+                csv += `${sub.timestamp},${sub.current_year.sustainable_living},${sub.current_year.health_optimization},${sub.current_year.environmental_conservation},${sub.year_2075.sustainable_living},${sub.year_2075.health_optimization},${sub.year_2075.environmental_conservation}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `priority_survey_data_${new Date().toISOString()}.csv`;
+            link.click();
+        }
+
+        // Initialize
+        createTernaryPlot('currentPlot', 'Present Day (2025)');
+        createTernaryPlot('futurePlot', 'Year 2075');
+        updatePoint('currentPlot', state.current, false);
+        updatePoint('futurePlot', state.future, false);
+        setupPlotInteraction('currentPlot', 'current');
+        setupPlotInteraction('futurePlot', 'future');
+
+        // Event listeners
+        document.getElementById('lockCurrent').addEventListener('click', () => {
+            state.currentLocked = true;
+            document.getElementById('currentPlot').classList.add('completed');
+            document.getElementById('lockCurrent').disabled = true;
+            document.getElementById('lockCurrent').textContent = '✓ Completed';
+            updatePoint('currentPlot', state.current, true);
+            checkSubmitButton();
+        });
+
+        document.getElementById('lockFuture').addEventListener('click', () => {
+            state.futureLocked = true;
+            document.getElementById('futurePlot').classList.add('completed');
+            document.getElementById('lockFuture').disabled = true;
+            document.getElementById('lockFuture').textContent = '✓ Completed';
+            updatePoint('futurePlot', state.future, true);
+            checkSubmitButton();
+        });
+
+        document.getElementById('submitButton').addEventListener('click', handleSubmit);
+        document.getElementById('downloadJson').addEventListener('click', downloadJSON);
+        document.getElementById('downloadCsv').addEventListener('click', downloadCSV);
+    </script>
+</body>
+</html>

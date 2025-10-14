@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Priority Balance Survey</title>
+    <title>Values and Priorities Survey</title>
     <style>
         * {
             margin: 0;
@@ -47,6 +47,68 @@
             color: #6b7280;
             margin-top: 0.5rem;
             display: block;
+        }
+
+        .form-section {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .form-section h2 {
+            font-size: 1.5rem;
+            color: #1f2937;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-label .required {
+            color: #ef4444;
+        }
+
+        .form-input,
+        .form-textarea {
+            padding: 0.75rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
         }
 
         .plots-grid {
@@ -204,6 +266,17 @@
             transform: none;
         }
 
+        .error-message {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
         .thank-you-overlay {
             display: none;
             position: fixed;
@@ -269,6 +342,7 @@
             display: flex;
             gap: 1rem;
             margin-bottom: 1rem;
+            flex-wrap: wrap;
         }
 
         .download-button {
@@ -336,17 +410,47 @@
         .ping {
             animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .plots-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Priority Balance Survey</h1>
+            <h1>Values and Priorities Survey</h1>
             <p class="subtitle">
                 How do you prioritize these three areas today versus in 2075?<br>
-                <span class="instruction">Drag the red point inside each triangle. The closer to a corner, the higher that priority.</span>
+                <span class="instruction">Please fill in your information below, then drag the red points inside each triangle.</span>
             </p>
         </header>
+
+        <!-- User Information Form -->
+        <div class="form-section">
+            <h2>Your Information</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Name <span class="required">*</span></label>
+                    <input type="text" id="userName" class="form-input" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email <span class="required">*</span></label>
+                    <input type="email" id="userEmail" class="form-input" placeholder="your.email@example.com" required>
+                </div>
+                <div class="form-group full-width">
+                    <label class="form-label">Comments (Optional)</label>
+                    <textarea id="userComments" class="form-textarea" placeholder="Share any thoughts or context about your priorities..."></textarea>
+                </div>
+            </div>
+            <div class="error-message" id="formError">Please fill in all required fields (Name and Email)</div>
+        </div>
 
         <div class="plots-grid">
             <!-- Current Year Plot -->
@@ -645,6 +749,12 @@
             });
         }
 
+        function validateForm() {
+            const name = document.getElementById('userName').value.trim();
+            const email = document.getElementById('userEmail').value.trim();
+            return name !== '' && email !== '' && email.includes('@');
+        }
+
         function checkSubmitButton() {
             const submitButton = document.getElementById('submitButton');
             submitButton.disabled = !(state.currentLocked && state.futureLocked);
@@ -655,9 +765,22 @@
                 alert('Please complete both ternary plots before submitting!');
                 return;
             }
+
+            if (!validateForm()) {
+                document.getElementById('formError').classList.add('show');
+                document.getElementById('userName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+
+            document.getElementById('formError').classList.remove('show');
             
             const submission = {
                 timestamp: new Date().toISOString(),
+                user_info: {
+                    name: document.getElementById('userName').value.trim(),
+                    email: document.getElementById('userEmail').value.trim(),
+                    comments: document.getElementById('userComments').value.trim()
+                },
                 current_year: {
                     sustainable_living: (state.current.sustainable * 100).toFixed(2),
                     health_optimization: (state.current.health * 100).toFixed(2),
@@ -679,7 +802,11 @@
             setTimeout(() => {
                 document.getElementById('thankYouOverlay').classList.remove('show');
                 
-                // Reset for next submission
+                // Reset form and plots for next submission
+                document.getElementById('userName').value = '';
+                document.getElementById('userEmail').value = '';
+                document.getElementById('userComments').value = '';
+                
                 state.currentLocked = false;
                 state.futureLocked = false;
                 state.current = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
@@ -719,21 +846,22 @@
             const url = URL.createObjectURL(dataBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `priority_survey_data_${new Date().toISOString()}.json`;
+            link.download = `values_priorities_survey_${new Date().toISOString()}.json`;
             link.click();
         }
 
         function downloadCSV() {
-            let csv = 'Timestamp,Current_Sustainable,Current_Health,Current_Environmental,Future_Sustainable,Future_Health,Future_Environmental\n';
+            let csv = 'Timestamp,Name,Email,Comments,Current_Sustainable,Current_Health,Current_Environmental,Future_Sustainable,Future_Health,Future_Environmental\n';
             state.submissions.forEach(sub => {
-                csv += `${sub.timestamp},${sub.current_year.sustainable_living},${sub.current_year.health_optimization},${sub.current_year.environmental_conservation},${sub.year_2075.sustainable_living},${sub.year_2075.health_optimization},${sub.year_2075.environmental_conservation}\n`;
+                const comments = sub.user_info.comments.replace(/"/g, '""'); // Escape quotes in comments
+                csv += `"${sub.timestamp}","${sub.user_info.name}","${sub.user_info.email}","${comments}",${sub.current_year.sustainable_living},${sub.current_year.health_optimization},${sub.current_year.environmental_conservation},${sub.year_2075.sustainable_living},${sub.year_2075.health_optimization},${sub.year_2075.environmental_conservation}\n`;
             });
             
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `priority_survey_data_${new Date().toISOString()}.csv`;
+            link.download = `values_priorities_survey_${new Date().toISOString()}.csv`;
             link.click();
         }
 

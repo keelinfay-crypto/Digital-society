@@ -318,75 +318,18 @@
             color: #6b7280;
         }
 
-        .data-section {
-            background: white;
-            border-radius: 1rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            padding: 2rem;
-            margin-top: 2rem;
-            display: none;
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
         }
 
-        .data-section.show {
-            display: block;
-        }
-
-        .data-header {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #1f2937;
-            margin-bottom: 1rem;
-        }
-
-        .download-buttons {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .download-button {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1.5rem;
-            border: none;
-            border-radius: 0.5rem;
-            font-size: 1rem;
-            font-weight: 600;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .download-button.json {
-            background: #10b981;
-        }
-
-        .download-button.json:hover {
-            background: #059669;
-        }
-
-        .download-button.csv {
-            background: #2563eb;
-        }
-
-        .download-button.csv:hover {
-            background: #1d4ed8;
-        }
-
-        .data-display {
-            max-height: 400px;
-            overflow: auto;
-            background: #f9fafb;
-            border-radius: 0.5rem;
-            padding: 1rem;
-        }
-
-        .data-display pre {
-            font-size: 0.875rem;
-            color: #374151;
-            white-space: pre-wrap;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         footer {
@@ -512,45 +455,22 @@
             </div>
         </div>
 
-        <div class="data-section" id="dataSection">
-            <h2 class="data-header">Collected Data (<span id="responseCount">0</span> responses)</h2>
-            <div class="download-buttons">
-                <button class="download-button json" id="downloadJson">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download JSON
-                </button>
-                <button class="download-button csv" id="downloadCsv">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Download CSV
-                </button>
-            </div>
-            <div class="data-display">
-                <pre id="dataDisplay"></pre>
-            </div>
-        </div>
-
         <footer>
             <p>📍 Sustainable Living is at the bottom-left corner</p>
-            <p>Data is stored locally in your browser. Download before closing the page.</p>
+            <p>Responses are securely collected via Formspree</p>
         </footer>
     </div>
 
     <script>
+        // Formspree endpoint for collecting survey responses
+        const FORMSPREE_ENDPOINT = 'https://formspree.io/f/xanldejj';
+
         // State management
         const state = {
             current: { sustainable: 0.33, health: 0.34, environmental: 0.33 },
             future: { sustainable: 0.33, health: 0.34, environmental: 0.33 },
             currentLocked: false,
-            futureLocked: false,
-            submissions: []
+            futureLocked: false
         };
 
         const SIZE = 400;
@@ -760,7 +680,7 @@
             submitButton.disabled = !(state.currentLocked && state.futureLocked);
         }
 
-        function handleSubmit() {
+        async function handleSubmit() {
             if (!state.currentLocked || !state.futureLocked) {
                 alert('Please complete both ternary plots before submitting!');
                 return;
@@ -774,95 +694,73 @@
 
             document.getElementById('formError').classList.remove('show');
             
-            const submission = {
+            const submitButton = document.getElementById('submitButton');
+            const originalText = submitButton.textContent;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="loading-spinner"></span> Submitting...';
+            
+            const formData = {
+                name: document.getElementById('userName').value.trim(),
+                email: document.getElementById('userEmail').value.trim(),
+                comments: document.getElementById('userComments').value.trim(),
                 timestamp: new Date().toISOString(),
-                user_info: {
-                    name: document.getElementById('userName').value.trim(),
-                    email: document.getElementById('userEmail').value.trim(),
-                    comments: document.getElementById('userComments').value.trim()
-                },
-                current_year: {
-                    sustainable_living: (state.current.sustainable * 100).toFixed(2),
-                    health_optimization: (state.current.health * 100).toFixed(2),
-                    environmental_conservation: (state.current.environmental * 100).toFixed(2)
-                },
-                year_2075: {
-                    sustainable_living: (state.future.sustainable * 100).toFixed(2),
-                    health_optimization: (state.future.health * 100).toFixed(2),
-                    environmental_conservation: (state.future.environmental * 100).toFixed(2)
-                }
+                current_sustainable_living: (state.current.sustainable * 100).toFixed(2),
+                current_health_optimization: (state.current.health * 100).toFixed(2),
+                current_environmental_conservation: (state.current.environmental * 100).toFixed(2),
+                future_sustainable_living: (state.future.sustainable * 100).toFixed(2),
+                future_health_optimization: (state.future.health * 100).toFixed(2),
+                future_environmental_conservation: (state.future.environmental * 100).toFixed(2)
             };
             
-            state.submissions.push(submission);
-            updateDataDisplay();
-            
-            // Show thank you message
-            document.getElementById('thankYouOverlay').classList.add('show');
-            
-            setTimeout(() => {
-                document.getElementById('thankYouOverlay').classList.remove('show');
+            try {
+                const response = await fetch(FORMSPREE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
                 
-                // Reset form and plots for next submission
-                document.getElementById('userName').value = '';
-                document.getElementById('userEmail').value = '';
-                document.getElementById('userComments').value = '';
-                
-                state.currentLocked = false;
-                state.futureLocked = false;
-                state.current = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
-                state.future = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
-                
-                updatePoint('currentPlot', state.current, false);
-                updatePoint('futurePlot', state.future, false);
-                updateValues('current', state.current);
-                updateValues('future', state.future);
-                
-                document.getElementById('currentPlot').classList.remove('completed');
-                document.getElementById('futurePlot').classList.remove('completed');
-                document.getElementById('lockCurrent').disabled = false;
-                document.getElementById('lockCurrent').textContent = 'Lock In Current Values';
-                document.getElementById('lockFuture').disabled = false;
-                document.getElementById('lockFuture').textContent = 'Lock In Future Values';
-                
-                checkSubmitButton();
-            }, 3000);
-        }
-
-        function updateDataDisplay() {
-            const dataSection = document.getElementById('dataSection');
-            const dataDisplay = document.getElementById('dataDisplay');
-            const responseCount = document.getElementById('responseCount');
-            
-            if (state.submissions.length > 0) {
-                dataSection.classList.add('show');
-                responseCount.textContent = state.submissions.length;
-                dataDisplay.textContent = JSON.stringify(state.submissions, null, 2);
+                if (response.ok) {
+                    // Show thank you message
+                    document.getElementById('thankYouOverlay').classList.add('show');
+                    
+                    setTimeout(() => {
+                        document.getElementById('thankYouOverlay').classList.remove('show');
+                        
+                        // Reset form and plots for next submission
+                        document.getElementById('userName').value = '';
+                        document.getElementById('userEmail').value = '';
+                        document.getElementById('userComments').value = '';
+                        
+                        state.currentLocked = false;
+                        state.futureLocked = false;
+                        state.current = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
+                        state.future = { sustainable: 0.33, health: 0.34, environmental: 0.33 };
+                        
+                        updatePoint('currentPlot', state.current, false);
+                        updatePoint('futurePlot', state.future, false);
+                        updateValues('current', state.current);
+                        updateValues('future', state.future);
+                        
+                        document.getElementById('currentPlot').classList.remove('completed');
+                        document.getElementById('futurePlot').classList.remove('completed');
+                        document.getElementById('lockCurrent').disabled = false;
+                        document.getElementById('lockCurrent').textContent = 'Lock In Current Values';
+                        document.getElementById('lockFuture').disabled = false;
+                        document.getElementById('lockFuture').textContent = 'Lock In Future Values';
+                        
+                        submitButton.textContent = originalText;
+                        checkSubmitButton();
+                    }, 3000);
+                } else {
+                    throw new Error('Submission failed');
+                }
+            } catch (error) {
+                alert('There was an error submitting your response. Please try again.');
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
             }
-        }
-
-        function downloadJSON() {
-            const dataStr = JSON.stringify(state.submissions, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `values_priorities_survey_${new Date().toISOString()}.json`;
-            link.click();
-        }
-
-        function downloadCSV() {
-            let csv = 'Timestamp,Name,Email,Comments,Current_Sustainable,Current_Health,Current_Environmental,Future_Sustainable,Future_Health,Future_Environmental\n';
-            state.submissions.forEach(sub => {
-                const comments = sub.user_info.comments.replace(/"/g, '""'); // Escape quotes in comments
-                csv += `"${sub.timestamp}","${sub.user_info.name}","${sub.user_info.email}","${comments}",${sub.current_year.sustainable_living},${sub.current_year.health_optimization},${sub.current_year.environmental_conservation},${sub.year_2075.sustainable_living},${sub.year_2075.health_optimization},${sub.year_2075.environmental_conservation}\n`;
-            });
-            
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `values_priorities_survey_${new Date().toISOString()}.csv`;
-            link.click();
         }
 
         // Initialize
@@ -893,8 +791,11 @@
         });
 
         document.getElementById('submitButton').addEventListener('click', handleSubmit);
-        document.getElementById('downloadJson').addEventListener('click', downloadJSON);
-        document.getElementById('downloadCsv').addEventListener('click', downloadCSV);
     </script>
 </body>
 </html>
+       
+
+      
+   
+          
